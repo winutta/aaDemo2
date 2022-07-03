@@ -11,8 +11,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 // import { TAARenderPass } from 'three/examples/jsm/postprocessing/TAARenderPass.js';
 // import { SSAARenderPass } from 'three/examples/jsm/postprocessing/SSAARenderPass.js';
 import { CopyShader } from 'three/examples/jsm/shaders/CopyShader.js';
-// import { HFTAARenderPass, HFSSAARenderPass } from "./postProcess"
-import { HFTAARenderPass, HFSSAARenderPass } from "./postProcess2";
+import { HFTAARenderPass, HFSSAARenderPass } from "./postProcess"
 
 import {setup} from "./setup"
 // import "./object";
@@ -40,15 +39,12 @@ function main() {
     var taaRenderPass = new HFTAARenderPass(scene, camera);
     taaRenderPass.unbiased = false;
     taaRenderPass.enabled = false;
-    // taaRenderPass.SSAASampleLevel = 
-    // taaRenderPass.accumulate = true;
 
     composer.addPass(taaRenderPass);
 
     var ssaaRenderPass = new HFSSAARenderPass(scene,camera);
     // var ssaaRenderPass = new SSAARenderPass(scene, camera);
-    ssaaRenderPass.SSAASampleLevel = 2;
-
+    ssaaRenderPass.sampleLevel = 2;
     // ssaaRenderPass.unbiased = true;
     ssaaRenderPass.enabled = false;
     composer.addPass(ssaaRenderPass);
@@ -60,20 +56,12 @@ function main() {
     var copyPass = new ShaderPass(CopyShader);
     composer.addPass(copyPass);
 
-    console.log(composer);
-
-    console.log("half", THREE.HalfFloatType);
-
     var aaState = {
         aaAlgo: "None",
-        index: 0,
-        taaTAA: 0,
-        taaSSAA: 0,
+
     }
 
     // var gui = new dat.GUI();
-
-    // let index = 0;
 
     var aaFolder = gui.addFolder("Anti Aliasing");
     aaFolder.open();
@@ -83,7 +71,6 @@ function main() {
         var algo = aaState.aaAlgo;
 
         if(algo == "TAA"){
-            aaState.index = 0;
             taaRenderPass.enabled = true;
             ssaaRenderPass.enabled = false;
             renderPass.enabled = false;
@@ -98,9 +85,8 @@ function main() {
         }
     }).name("AA Algorithm");
 
-    aaFolder.add(ssaaRenderPass,"SSAASampleLevel",0,5,1).name("SSAA Sample Level");
-    aaFolder.add(taaRenderPass, "sampleLevel", 0, 5, 1).name("TAA Temporal Sample Level");
-    aaFolder.add(taaRenderPass, "SSAASampleLevel", 0, 5, 1).name("TAA Idle SSAA Sample Level");
+    aaFolder.add(ssaaRenderPass,"sampleLevel",0,5,1).name("SSAA Sample Level");
+    aaFolder.add(taaRenderPass, "sampleLevel", 0, 5, 1).name("TAA Sample Level");
 
     aaFolder.add(ssaaRenderPass, "unbiased").name("SSAA Unbiased");
     aaFolder.add(taaRenderPass, "unbiased").name("TAA Unbiased");
@@ -124,41 +110,34 @@ function main() {
 
 // RENDER LOOP
 
-
+let index = 0;
 
 function render(time)
 {   
 
     requestAnimationFrame(render);
 
-    // index++;
-    
+    index++;
 
-    //maybe the banding is because the index is falling on a time when accumulate is false
-    // this forces the sampleRenderTarget of taaRenderPass to be generated from the SSAARenderPass code
-    // Could just 
-
-    // if (Math.round(aaState.index / 180) % 2 === 0){
+    // if (Math.round(index / 180) % 2 === 0){
     //     // console.log("hi");
     //     if (taaRenderPass) taaRenderPass.accumulate = true;
     // } else {
     //     // console.log("bye");
     //     if (taaRenderPass) taaRenderPass.accumulate = false;
     // }
-    if (aaState.index <1){
-        if (taaRenderPass) taaRenderPass.accumulate = false;
-    } else if (aaState.index <100){
+
+    if(index<100){
+        
         if (taaRenderPass) taaRenderPass.accumulate = true;
-    } else if (aaState.index <200){
+    } else if (index<200){
         if (taaRenderPass) taaRenderPass.accumulate = false;
         // index = 0;
     } 
     else {
-        aaState.index = 0;
+        index = 0;
         if (taaRenderPass) taaRenderPass.accumulate = false;
     }
-
-    aaState.index++;
 
     // if (index<10){
     //     if (taaRenderPass) taaRenderPass.accumulate = false;

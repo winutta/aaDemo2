@@ -11,41 +11,127 @@ import { SSAARenderPass } from 'three/examples/jsm/postprocessing/SSAARenderPass
 
 // var { scene, camera, renderer } = setup;
 
+export class HFTAARenderPass extends TAARenderPass {
+    constructor(scene, camera, clearColor, clearAlpha) {
 
-class parent {
-    constructor(){
-        this.test = false;
+        super(scene, camera, clearColor, clearAlpha);
+
+        // this.sampleLevel = 0;
+        // this.accumulate = false;
+
     }
 
-    showTest(){
-        console.log(this.test);
+    render(renderer, writeBuffer, readBuffer, deltaTime) {
+
+        if (this.accumulate === false) {
+
+            // TAARenderPass.prototype.render(renderer, writeBuffer, readBuffer, deltaTime); // maybe this is problematic because super now refers to just taarenderpass
+            // super.render(renderer, writeBuffer, readBuffer, deltaTime);
+            SSAARenderPass.prototype.render.call(this,renderer, writeBuffer, readBuffer, deltaTime);
+
+            // console.log(TAARenderPass.prototype);
+            this.accumulateIndex = - 1;
+            return;
+
+        }
+
+        const jitterOffsets = _JitterVectors[5];
+
+        if (this.sampleRenderTarget === undefined) {
+            // console.log("params",this.params);
+            this.sampleRenderTarget = new THREE.WebGLRenderTarget(readBuffer.width, readBuffer.height, { type: THREE.HalfFloatType });
+            // this.sampleRenderTarget = new THREE.WebGLRenderTarget(readBuffer.width, readBuffer.height);
+            this.sampleRenderTarget.texture.name = 'TAARenderPass.sample';
+
+        }
+
+        if (this.holdRenderTarget === undefined) {
+
+            this.holdRenderTarget = new THREE.WebGLRenderTarget(readBuffer.width, readBuffer.height, { type: THREE.HalfFloatType });
+            // this.holdRenderTarget = new THREE.WebGLRenderTarget(readBuffer.width, readBuffer.height);
+            this.holdRenderTarget.texture.name = 'TAARenderPass.hold';
+
+        }
+
+        if (this.accumulateIndex === - 1) {
+
+            // TAARenderPass.prototype.render(renderer, this.holdRenderTarget, readBuffer, deltaTime);
+            // super.render(renderer, this.holdRenderTarget, readBuffer, deltaTime);
+            SSAARenderPass.prototype.render.call(this,renderer, this.holdRenderTarget, readBuffer, deltaTime);
+
+            this.accumulateIndex = 0;
+
+        }
+
+        const autoClear = renderer.autoClear;
+        renderer.autoClear = false;
+
+        const sampleWeight = 1.0 / (jitterOffsets.length);
+
+        if (this.accumulateIndex >= 0 && this.accumulateIndex < jitterOffsets.length) {
+
+            this.copyUniforms['opacity'].value = sampleWeight;
+            this.copyUniforms['tDiffuse'].value = writeBuffer.texture;
+
+            // render the scene multiple times, each slightly jitter offset from the last and accumulate the results.
+            const numSamplesPerFrame = Math.pow(2, this.sampleLevel);
+            for (let i = 0; i < numSamplesPerFrame; i++) {
+
+                const j = this.accumulateIndex;
+                const jitterOffset = jitterOffsets[j];
+
+                if (this.camera.setViewOffset) {
+
+                    this.camera.setViewOffset(readBuffer.width, readBuffer.height,
+                        jitterOffset[0] * 0.0625, jitterOffset[1] * 0.0625, // 0.0625 = 1 / 16
+                        readBuffer.width, readBuffer.height);
+
+                }
+
+                renderer.setRenderTarget(writeBuffer);
+                renderer.clear();
+                renderer.render(this.scene, this.camera);
+
+                renderer.setRenderTarget(this.sampleRenderTarget);
+                if (this.accumulateIndex === 0) renderer.clear();
+                this.fsQuad.render(renderer);
+
+                this.accumulateIndex++;
+
+                if (this.accumulateIndex >= jitterOffsets.length) break;
+
+            }
+
+            if (this.camera.clearViewOffset) this.camera.clearViewOffset();
+
+        }
+
+        const accumulationWeight = this.accumulateIndex * sampleWeight;
+
+        if (accumulationWeight > 0) {
+
+            this.copyUniforms['opacity'].value = 1.0;
+            this.copyUniforms['tDiffuse'].value = this.sampleRenderTarget.texture;
+            renderer.setRenderTarget(writeBuffer);
+            renderer.clear();
+            this.fsQuad.render(renderer);
+
+        }
+
+        if (accumulationWeight < 1.0) {
+
+            this.copyUniforms['opacity'].value = 1.0 - accumulationWeight;
+            this.copyUniforms['tDiffuse'].value = this.holdRenderTarget.texture;
+            renderer.setRenderTarget(writeBuffer);
+            if (accumulationWeight === 0) renderer.clear();
+            this.fsQuad.render(renderer);
+
+        }
+
+        renderer.autoClear = autoClear;
+
     }
 }
-
-class child extends parent{
-    constructor(){
-        super();
-        this.test = true;
-    }
-
-    show(){
-        console.log(this.test);
-    }
-
-    s(){
-        parent.prototype.showTest.call(this);
-    }
-    sh(){
-        super.showTest();
-    }
-}
-
-var c = new child();
-c.showTest();
-c.s();
-c.sh();
-
-
 
 export class HFSSAARenderPass extends SSAARenderPass {
     constructor(scene, camera, clearColor, clearAlpha) {
@@ -169,132 +255,6 @@ export class HFSSAARenderPass extends SSAARenderPass {
     }
 }
 
-
-export class HFTAARenderPass extends TAARenderPass {
-    constructor(scene, camera, clearColor, clearAlpha) {
-
-        super(scene, camera, clearColor, clearAlpha);
-
-        // this.sampleLevel = 0;
-        // this.accumulate = false;
-        // console.log("initiating taa but hi def");
-
-    }
-
-    render(renderer, writeBuffer, readBuffer, deltaTime) {
-
-        if (this.accumulate === false) {
-
-            // TAARenderPass.prototype.render(renderer, writeBuffer, readBuffer, deltaTime); // maybe this is problematic because super now refers to just taarenderpass
-            // super.render(renderer, writeBuffer, readBuffer, deltaTime);
-            HFSSAARenderPass.prototype.render.call(this, renderer, writeBuffer, readBuffer, deltaTime);  //maybe this is incorrect because the this being referenced in wrong.
-            // SSAARenderPass.render(renderer, writeBuffer, readBuffer, deltaTime);
-            // SSAARenderPass.prototype.render.apply
-
-            // console.log(TAARenderPass.prototype);
-            this.accumulateIndex = - 1;
-            return;
-
-        }
-
-        const jitterOffsets = _JitterVectors[5];
-
-        if (this.sampleRenderTarget === undefined) {
-            // console.log("params",this.params);
-            this.sampleRenderTarget = new THREE.WebGLRenderTarget(readBuffer.width, readBuffer.height, { type: THREE.HalfFloatType });
-            // this.sampleRenderTarget = new THREE.WebGLRenderTarget(readBuffer.width, readBuffer.height);
-            this.sampleRenderTarget.texture.name = 'TAARenderPass.sample';
-
-        }
-
-        if (this.holdRenderTarget === undefined) {
-
-            this.holdRenderTarget = new THREE.WebGLRenderTarget(readBuffer.width, readBuffer.height, { type: THREE.HalfFloatType });
-            // this.holdRenderTarget = new THREE.WebGLRenderTarget(readBuffer.width, readBuffer.height);
-            this.holdRenderTarget.texture.name = 'TAARenderPass.hold';
-
-        }
-
-        if (this.accumulateIndex === - 1) {
-
-            // TAARenderPass.prototype.render(renderer, this.holdRenderTarget, readBuffer, deltaTime);
-            // super.render(renderer, this.holdRenderTarget, readBuffer, deltaTime);
-            HFSSAARenderPass.prototype.render.call(this, renderer, this.holdRenderTarget, readBuffer, deltaTime);
-            // SSAARenderPass.render(renderer, this.holdRenderTarget, readBuffer, deltaTime);
-
-            this.accumulateIndex = 0;
-
-        }
-
-        const autoClear = renderer.autoClear;
-        renderer.autoClear = false;
-
-        const sampleWeight = 1.0 / (jitterOffsets.length);
-
-        if (this.accumulateIndex >= 0 && this.accumulateIndex < jitterOffsets.length) {
-
-            this.copyUniforms['opacity'].value = sampleWeight;
-            this.copyUniforms['tDiffuse'].value = writeBuffer.texture;
-
-            // render the scene multiple times, each slightly jitter offset from the last and accumulate the results.
-            const numSamplesPerFrame = Math.pow(2, this.sampleLevel);
-            for (let i = 0; i < numSamplesPerFrame; i++) {
-
-                const j = this.accumulateIndex;
-                const jitterOffset = jitterOffsets[j];
-
-                if (this.camera.setViewOffset) {
-
-                    this.camera.setViewOffset(readBuffer.width, readBuffer.height,
-                        jitterOffset[0] * 0.0625, jitterOffset[1] * 0.0625, // 0.0625 = 1 / 16
-                        readBuffer.width, readBuffer.height);
-
-                }
-
-                renderer.setRenderTarget(writeBuffer);
-                renderer.clear();
-                renderer.render(this.scene, this.camera);
-
-                renderer.setRenderTarget(this.sampleRenderTarget);
-                if (this.accumulateIndex === 0) renderer.clear();
-                this.fsQuad.render(renderer);
-
-                this.accumulateIndex++;
-
-                if (this.accumulateIndex >= jitterOffsets.length) break;
-
-            }
-
-            if (this.camera.clearViewOffset) this.camera.clearViewOffset();
-
-        }
-
-        const accumulationWeight = this.accumulateIndex * sampleWeight;
-
-        if (accumulationWeight > 0) {
-
-            this.copyUniforms['opacity'].value = 1.0;
-            this.copyUniforms['tDiffuse'].value = this.sampleRenderTarget.texture;
-            renderer.setRenderTarget(writeBuffer);
-            renderer.clear();
-            this.fsQuad.render(renderer);
-
-        }
-
-        if (accumulationWeight < 1.0) {
-
-            this.copyUniforms['opacity'].value = 1.0 - accumulationWeight;
-            this.copyUniforms['tDiffuse'].value = this.holdRenderTarget.texture;
-            renderer.setRenderTarget(writeBuffer);
-            if (accumulationWeight === 0) renderer.clear();
-            this.fsQuad.render(renderer);
-
-        }
-
-        renderer.autoClear = autoClear;
-
-    }
-}
 const _JitterVectors = [
     [
         [0, 0]

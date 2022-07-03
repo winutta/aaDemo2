@@ -117,7 +117,7 @@ function createMaterial(vertShader,fragShader, uniforms){
         uniforms: uniforms,
         vertexShader: vertShader,
         fragmentShader: fragShader,
-        transparent: true
+        // transparent: true
     });
 
     return material;

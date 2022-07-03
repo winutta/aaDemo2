@@ -38,11 +38,8 @@ export class Setup {
         
 
         renderer.setRenderTarget(renderTarget);
-        var colVal = new THREE.Color();
-        
-        console.log("clear col a", renderer.getClearColor(colVal),renderer.getClearAlpha());
         // renderer.outputEncoding = THREE.sRGBEncoding;
-        // renderer.autoClear = true;
+        // renderer.autoClear = false;
         // renderer.autoClearColor = false;
         // renderer.autoClearStencil = false;
 
